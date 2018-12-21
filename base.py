@@ -1,3 +1,9 @@
+import pandas as pd
+import bs4 as bs
+from urllib.request import urlopen
+import functools
+
+
 class BrefStats():    
     def __init__(self, year):
         self.year = year
@@ -54,8 +60,7 @@ class BrefStats():
         rating_df['DRtg'] = pd.Series(drtg)
 
         return rating_df
-    
-#     @timer #working
+
     @functools.lru_cache(maxsize=32)
     def _gen_adv(self):
         """
