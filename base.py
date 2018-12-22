@@ -127,10 +127,12 @@ class SingleSeasonStats():
         self.CACHE_FLAG = True
         return df
 
+
 class MultiSeasonStats():
     def __init__(self, year):
         self.year = year
-        CACHE_FLAG = False
+        self.all_nba_dict = {}
+        self.CACHE_FLAG = False
         
         
     def _gen_dataframe(self, url): 
@@ -159,7 +161,7 @@ class MultiSeasonStats():
         return df
         
         
-    @functools.lru_cache(maxsize=64)  
+    @timer    
     def multi_season(self, start):
         season_range = range(start, self.year+1)
         pool = ThreadPool(25)
@@ -190,11 +192,42 @@ class MultiSeasonStats():
         adv_df.loc[:, 'ORtg'].replace('', np.nan) 
         adv_df.dropna(inplace = True)
         adv_df['Net Rtg'] = adv_df['ORtg'].astype(int) - adv_df['DRtg'].astype(int)
-
+        
         com_df = basic_df.join(adv_df)
         com_df = com_df.drop(com_df.columns.to_series()['Pos':'MP'], axis=1)
+        self._add_label(com_df)
 
         return com_df
+    
+    
+    def gen_all_nba(self):
+        '''
+        Generates, returns, and caches the all-nba player list of input year
+        '''
+        url = 'https://www.basketball-reference.com/leagues/NBA_' + str(self.year)+'.html'
+        allnba_players = []
+        soup = bs.BeautifulSoup(urlopen(url), 'lxml')
+        spans = [span.get_text() for span in soup.find_all('span')]
+        all_nba = soup.find('div', id='all_honors')
+        players = re.findall(r"'>(\w*[-\s]\w*['\s-]*\w*)", str(all_nba))
+        
+        self.all_nba_dict[self.year] = players
+    
+    def _add_label(self, df):
+        '''
+        returns new df with binary col indicating whether player made all-nba that year by comparing to cache
+        of all-nba players
+        '''
+        if self.CACHE_FLAG is False:
+            self.gen_all_nba()
+
+        df['all_nba'] = 0
+        for player in df.index:
+            if player in self.all_nba_dict[self.year]:
+                df['all_nba'].loc[player] = 1
+        
+        self.CACHE_FLAG = True
+        return df
     
 
         
