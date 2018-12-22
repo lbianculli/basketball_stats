@@ -8,11 +8,7 @@ import functools
 import numpy as np
 pd.options.mode.chained_assignment = None
 
-
 class SingleSeasonStats(): 
-    '''
-    Class that creates pd.DataFrames of NBA players' stats -- basic, advanced, or both -- for a given year.
-    '''
     def __init__(self, year):
         self.year = year
         self.all_nba_dict = {}
@@ -79,17 +75,18 @@ class SingleSeasonStats():
         return adv_df
 
     @functools.lru_cache(maxsize=32)
-    def combine(self): 
+    def combine(self): #if really wanted could set year here (as w/ others) and reset inside. Has to be a better way
         '''
         Tries to combine adv and basic DFs. Otherwise returns just basic
         '''
+
         basic_df = self.basic_stats()
         basic_df = basic_df.drop(basic_df.columns.to_series()['Pos':'DRB'], axis=1)
 
         try:
 
             adv_df = self.adv_stats()
-            com_df = pd.concat((basic_df, adv_df), axis=1, sort=True)
+            com_df = basic_df.join(adv_df)
             self._add_label(com_df)
             com_df = com_df.drop(com_df.columns.to_series()['Pos':'MP'], axis=1)
             
@@ -129,4 +126,76 @@ class SingleSeasonStats():
         
         self.CACHE_FLAG = True
         return df
+
+class MultiSeasonStats():
+    def __init__(self, year):
+        self.year = year
+        CACHE_FLAG = False
+        
+        
+    def _gen_dataframe(self, url): 
+        '''
+        Boilerplate DF generator
+        '''
+        cols = []
+        soup = bs.BeautifulSoup(urlopen(url), 'lxml')
+        table = soup.find('div', class_='table_outer_container')
+
+        for th in table.thead.find_all('th'):
+            if th.get_text() == '\xa0':
+                cols.append('x')
+            else:
+                cols.append(th.get_text())
+
+        n_cols = len(table.thead.find_all('th')) - 1
+        data = [td.get_text() for tr in table.tbody.find_all('tr', class_='full_table') for td in tr.find_all('td')]       
+        data = [data[i:i+n_cols] for i in range(0, len(data), n_cols)]
+
+        all_players = [sublist.pop(0).replace('*', '') for sublist in data]
+
+        cols = cols[2:]
+        df = pd.DataFrame(index=all_players, data=data, columns=cols)
+
+        return df
+        
+        
+    @functools.lru_cache(maxsize=64)  
+    def multi_season(self, start):
+        season_range = range(start, self.year+1)
+        pool = ThreadPool(25)
+        df_container = pool.map(self.combine, [season for season in season_range])
+        final_df = pd.concat(df_container)
+        pool.close
+
+        return final_df
+
+
+    def combine(self, year):
+        basic_url = 'https://www.basketball-reference.com/leagues/NBA_' + str(year) + '_per_game.html'
+        adv_url = 'https://www.basketball-reference.com/leagues/NBA_' + str(year) + '_advanced.html'
+        per_poss_url = 'https://www.basketball-reference.com/leagues/NBA_' + str(year) + '_per_poss.html'
+
+        basic_df = self._gen_dataframe(basic_url)
+        basic_df = basic_df.drop(basic_df.columns.to_series()['Pos':'DRB'], axis=1)
+
+        adv_df = self._gen_dataframe(adv_url)
+        per_poss_df = self._gen_dataframe(per_poss_url)
+
+        ortg = per_poss_df['ORtg'].replace('', np.nan)
+        drtg = per_poss_df['DRtg'].replace('', np.nan) 
+        adv_df['ORtg'] = ortg
+        adv_df['DRtg'] = drtg
+        adv_df.drop('x', axis=1, inplace=True)
+
+        adv_df.loc[:, 'ORtg'].replace('', np.nan) 
+        adv_df.dropna(inplace = True)
+        adv_df['Net Rtg'] = adv_df['ORtg'].astype(int) - adv_df['DRtg'].astype(int)
+
+        com_df = basic_df.join(adv_df)
+        com_df = com_df.drop(com_df.columns.to_series()['Pos':'MP'], axis=1)
+
+        return com_df
+    
+
+        
 
