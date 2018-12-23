@@ -84,7 +84,6 @@ class SingleSeasonStats():
         basic_df = basic_df.drop(basic_df.columns.to_series()['Pos':'DRB'], axis=1)
 
         try:
-
             adv_df = self.adv_stats()
             com_df = basic_df.join(adv_df)
             self._add_label(com_df)
@@ -95,17 +94,16 @@ class SingleSeasonStats():
         except Exception as e:
             print(e)
             self._add_label(basic_df)
+            
             return basic_df
         
         
-    def gen_all_nba(self):
+    def _gen_all_nba(self):
         '''
         Generates, returns, and caches the all-nba player list of input year
         '''
         url = 'https://www.basketball-reference.com/leagues/NBA_' + str(self.year)+'.html'
-        allnba_players = []
         soup = bs.BeautifulSoup(urlopen(url), 'lxml')
-        spans = [span.get_text() for span in soup.find_all('span')]
         all_nba = soup.find('div', id='all_honors')
         players = re.findall(r"'>(\w*[-\s]\w*['\s-]*\w*)", str(all_nba))
         
@@ -117,7 +115,7 @@ class SingleSeasonStats():
         of all-nba players
         '''
         if self.CACHE_FLAG is False:
-            self.gen_all_nba()
+            self._gen_all_nba()
 
         df['all_nba'] = 0
         for player in df.index:
@@ -128,61 +126,39 @@ class SingleSeasonStats():
         return df
 
 
-class MultiSeasonStats():
-    def __init__(self, year):
-        self.year = year
-        self.all_nba_dict = {}
-        self.CACHE_FLAG = False
+class MultiSeasonStats(SingleSeasonStats):
+    def __init__(self, start_year, year):
+        super().__init__(year)
+        self.start_year = start_year
         
+    @functools.lru_cache(maxsize=64)
+    def multi_season(self, start_year=None):
+        if start_year is None:
+            start_year = self.start_year
         
-    def _gen_dataframe(self, url): 
-        '''
-        Boilerplate DF generator
-        '''
-        cols = []
-        soup = bs.BeautifulSoup(urlopen(url), 'lxml')
-        table = soup.find('div', class_='table_outer_container')
-
-        for th in table.thead.find_all('th'):
-            if th.get_text() == '\xa0':
-                cols.append('x')
-            else:
-                cols.append(th.get_text())
-
-        n_cols = len(table.thead.find_all('th')) - 1
-        data = [td.get_text() for tr in table.tbody.find_all('tr', class_='full_table') for td in tr.find_all('td')]       
-        data = [data[i:i+n_cols] for i in range(0, len(data), n_cols)]
-
-        all_players = [sublist.pop(0).replace('*', '') for sublist in data]
-
-        cols = cols[2:]
-        df = pd.DataFrame(index=all_players, data=data, columns=cols)
-
-        return df
-        
-        
-    @timer    
-    def multi_season(self, start):
-        season_range = range(start, self.year+1)
+        season_range = range(start_year, self.year+1)
         pool = ThreadPool(25)
-        df_container = pool.map(self.combine, [season for season in season_range])
+        df_container = pool.map(self.combine_multi, [season for season in season_range])
         final_df = pd.concat(df_container)
         pool.close
 
         return final_df
 
 
-    def combine(self, year):
-        basic_url = 'https://www.basketball-reference.com/leagues/NBA_' + str(year) + '_per_game.html'
-        adv_url = 'https://www.basketball-reference.com/leagues/NBA_' + str(year) + '_advanced.html'
-        per_poss_url = 'https://www.basketball-reference.com/leagues/NBA_' + str(year) + '_per_poss.html'
+    def _combine_multi(self, start_year=None):
+        if start_year is None:
+            start_year = self.start_year
+        
+        basic_url = 'https://www.basketball-reference.com/leagues/NBA_' + str(start_year) + '_per_game.html'
+        adv_url = 'https://www.basketball-reference.com/leagues/NBA_' + str(start_year) + '_advanced.html'
+        per_poss_url = 'https://www.basketball-reference.com/leagues/NBA_' + str(start_year) + '_per_poss.html'
 
         basic_df = self._gen_dataframe(basic_url)
         basic_df = basic_df.drop(basic_df.columns.to_series()['Pos':'DRB'], axis=1)
 
         adv_df = self._gen_dataframe(adv_url)
         per_poss_df = self._gen_dataframe(per_poss_url)
-
+    
         ortg = per_poss_df['ORtg'].replace('', np.nan)
         drtg = per_poss_df['DRtg'].replace('', np.nan) 
         adv_df['ORtg'] = ortg
@@ -198,37 +174,7 @@ class MultiSeasonStats():
         self._add_label(com_df)
 
         return com_df
-    
-    
-    def gen_all_nba(self):
-        '''
-        Generates, returns, and caches the all-nba player list of input year
-        '''
-        url = 'https://www.basketball-reference.com/leagues/NBA_' + str(self.year)+'.html'
-        allnba_players = []
-        soup = bs.BeautifulSoup(urlopen(url), 'lxml')
-        spans = [span.get_text() for span in soup.find_all('span')]
-        all_nba = soup.find('div', id='all_honors')
-        players = re.findall(r"'>(\w*[-\s]\w*['\s-]*\w*)", str(all_nba))
-        
-        self.all_nba_dict[self.year] = players
-    
-    def _add_label(self, df):
-        '''
-        returns new df with binary col indicating whether player made all-nba that year by comparing to cache
-        of all-nba players
-        '''
-        if self.CACHE_FLAG is False:
-            self.gen_all_nba()
 
-        df['all_nba'] = 0
-        for player in df.index:
-            if player in self.all_nba_dict[self.year]:
-                df['all_nba'].loc[player] = 1
-        
-        self.CACHE_FLAG = True
-        return df
-    
 
         
 
