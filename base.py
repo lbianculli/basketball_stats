@@ -1,7 +1,6 @@
 import bs4 as bs
-import collections
 import pandas as pd
-from urllib.request import urlopen
+import requests
 import re
 import time
 import functools
@@ -79,7 +78,7 @@ class SingleSeasonStats():
         Generates, returns, and caches the all-nba player list of input year
         '''
         url = 'https://www.basketball-reference.com/leagues/NBA_' + str(self.year)+'.html'
-        soup = bs.BeautifulSoup(urlopen(url), 'lxml')
+        soup = bs.BeautifulSoup(requests.get(url).text, 'lxml')
         all_nba = soup.find('div', id='all_honors')
         players = re.findall(r"'>(\w*[-\s]\w*['\s-]*\w*)", str(all_nba))
         
@@ -108,7 +107,7 @@ class MultiSeasonStats(SingleSeasonStats):
         self.start_year = start_year
         
     @functools.lru_cache(maxsize=64)
-    def multi_season(self, start_year=None):
+    def multi_season_stats(self, start_year=None):
         if start_year is None:
             start_year = self.start_year
         
@@ -121,7 +120,7 @@ class MultiSeasonStats(SingleSeasonStats):
         return final_df
 
 
-    def _combine_multi(self, start_year=None):
+    def _combine_dataframes(self, start_year=None):
         if start_year is None:
             start_year = self.start_year
         
