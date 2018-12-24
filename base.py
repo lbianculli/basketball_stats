@@ -8,7 +8,7 @@ import functools
 import numpy as np
 pd.options.mode.chained_assignment = None
 
-from utils import _gen_dataframe
+from utils import _gen_dataframe, remove_comment_tags
 
 class SingleSeasonStats(): 
     def __init__(self, year):
