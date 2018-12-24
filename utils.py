@@ -1,6 +1,5 @@
 import bs4 as bs
 import requests
-from urllib.request import urlopen
 import pandas as pd
 import numpy
 
@@ -9,7 +8,7 @@ def _gen_dataframe(url):
     Boilerplate DF generator
     '''
     cols = []
-    soup = bs.BeautifulSoup(urlopen(url), 'lxml')
+    soup = bs.BeautifulSoup(requests.get(url).text, 'lxml')
     table = soup.find('div', class_='table_outer_container')
 
     for th in table.thead.find_all('th'):
@@ -34,10 +33,10 @@ def remove_comment_tags(url):
     """
     takes an input url and returns the DOM tree w/o comment tags wrapping the tables
     """
-    page = requests.get(url)
+    resp = requests.get(url)
 
     #remove the opening comment tag
-    no_open_tag = page.text.replace("""<!--\n   <div class="table_outer_container">""",
+    no_open_tag = resp.text.replace("""<!--\n   <div class="table_outer_container">""",
                                     """<div class="table_outer_container">""")
     #remove closing comment tag
     no_close_tag = no_open_tag.replace("""</div>\n-->""","</div>")
