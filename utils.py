@@ -28,3 +28,18 @@ def _gen_dataframe(url):
     df = pd.DataFrame(index=all_players, data=data, columns=cols)
 
     return df
+
+
+def remove_comment_tags(url):
+    """
+    takes an input url and returns the DOM tree w/o comment tags wrapping the tables
+    """
+    page = requests.get(url)
+
+    #remove the opening comment tag
+    no_open_tag = page.text.replace("""<!--\n   <div class="table_outer_container">""",
+                                    """<div class="table_outer_container">""")
+    #remove closing comment tag
+    no_close_tag = no_open_tag.replace("""</div>\n-->""","</div>")
+    
+    return no_close_tag
