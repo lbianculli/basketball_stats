@@ -13,8 +13,9 @@ class SingleSeasonStats():
     def __init__(self, year):
         self.year = year
         self.all_nba_dict = {}
-        self.CACHE_FLAG = False
-
+#         self.CACHE_FLAG = False
+        
+    
     @functools.lru_cache(maxsize=32)
     def basic_stats(self): 
         '''
@@ -45,12 +46,14 @@ class SingleSeasonStats():
 
         adv_df.loc[:, 'ORtg'].replace('', np.nan) 
         adv_df.dropna(inplace = True)
-        adv_df['Net Rtg'] = adv_df['ORtg'].astype(int) - adv_df['DRtg'].astype(int)
+        adv_df['Net Rtg'] = adv_df['ORtg'] - adv_df['DRtg']
+        
+
     
         return adv_df
 
     @functools.lru_cache(maxsize=32)
-    def combine(self): #if really wanted could set year here (as w/ others) and reset inside. Has to be a better way
+    def combine(self, drop_no_contract=True): #if really wanted could set year here (as w/ others) and reset inside. Has to be a better way
         '''
         Tries to combine adv and basic DFs. Otherwise returns just basic
         '''
@@ -62,7 +65,15 @@ class SingleSeasonStats():
             adv_df = self.adv_stats()
             com_df = basic_df.join(adv_df)
             self._add_label(com_df)
-            com_df = com_df.drop(com_df.columns.to_series()['Pos':'MP'], axis=1)
+            com_df.drop(com_df.columns.to_series()['Pos':'G'], axis=1, inplace=True)
+            
+            com_df = com_df.join(self._gen_salaries())
+            com_df.rename(columns={'2018-19': 'Salary'}, inplace=True)
+
+            if drop_no_contract is True:
+                com_df.dropna(inplace=True)
+
+            com_df.replace(np.nan, 'Not under contract')
             
             return com_df
 
@@ -86,10 +97,10 @@ class SingleSeasonStats():
 
     def _add_label(self, df):
         '''
-        returns new df with binary col indicating whether player made all-nba that year by comparing to cache
-        of all-nba players
+        returns new df with binary colum indicating whether player made all-nba that year.
+        Compares takes from cache if function has been run previously
         '''
-        if self.CACHE_FLAG is False:
+        if ~(self.year in self.all_nba_dict):
             self._gen_all_nba()
 
         df['all_nba'] = 0
@@ -97,10 +108,58 @@ class SingleSeasonStats():
             if player in self.all_nba_dict[self.year]:
                 df['all_nba'].loc[player] = 1
         
-        self.CACHE_FLAG = True
         return df
+    
+    def _gen_salaries(self):
+        resp = requests.get('https://www.basketball-reference.com/contracts/players.html').text
+        soup = bs.BeautifulSoup(resp, 'lxml')
+        table = soup.find('div', class_='table_outer_container')
+        cols = [th.get_text() for th in table.thead.find('tr', class_=None).find_all('th')]
+        cols = cols[2:]
+        data = [td.get_text() for td in table.tbody.find_all('td')]
+        data = [element.replace('$', '') for element in data]
+        data = [element.replace(',', '') for element in data]
+
+        data = [data[i:i+10] for i in range(0, len(data), 10)]
+        players = [sublist.pop(0) for sublist in data]
+
+        salary_df = pd.DataFrame(index=players, columns=cols, data=data)
+        current_salary = salary_df['2018-19'].astype(int)
+        
+        return current_salary
+    
+    def salary_comparison(self, X_name, top_n=150, rect_shape=[.25, 1.2, 1.5, 1.2]):
+        '''
+        Returns scatter plot for given stat vs. slaary.
+        top_n is the number of players to be plotted, sorted by minutes played
+        '''
+        plt.style.use('ggplot')
+        cmap = cm.get_cmap('plasma')
+        ax1 = plt.axes(rect_shape)
+
+        df = stats.combine().sort_values('MP', ascending=False).head(top_n)
+        X1 = np.array(df[X_name])
+        X = X1.astype(float)
+        y = np.array(df['Salary']).astype(float)
+        y_range = range(0, 45, 5)
+        cmap = cmap(minmax_scale(X)-.1)
+        ax1.scatter(X, y, s=10, c=cmap)
+
+        com_top = df.sort_values(X_name, ascending=False).head(3)
+        names = [i for i in com_top.index][::-1]
+        array = np.array(df[X_name])
+        array_sort = (array.argsort()[-3:]).astype(int)
+
+        for i, x_idx in enumerate(array_sort):
+            ax1.annotate(names[i], (X1[x_idx], y[x_idx]))
 
 
+        xticks = ax1.get_xticklabels() #get tick labels so we can adjust them a bit with .setp
+        plt.setp(xticks, rotation=45)
+        ax1.plot(np.unique(X), np.poly1d(np.polyfit(X, y, 1))(np.unique(X)))
+        
+        ax1.set(yticklabels=y_range, xlabel=X_name, ylabel='Salary (millions)', 
+                title="{} vs. Salary".format(X_name));
 class MultiSeasonStats(SingleSeasonStats):
     def __init__(self, start_year, year):
         super().__init__(year)
