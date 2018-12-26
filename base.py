@@ -128,38 +128,69 @@ class SingleSeasonStats():
         
         return current_salary
     
-    def salary_comparison(self, X_name, top_n=150, rect_shape=[.25, 1.2, 1.5, 1.2]):
-        '''
-        Returns scatter plot for given stat vs. slaary.
-        top_n is the number of players to be plotted, sorted by minutes played
-        '''
-        plt.style.use('ggplot')
-        cmap = cm.get_cmap('plasma')
-        ax1 = plt.axes(rect_shape)
+ 
+def salary_comparison(X_name, top_n=150, annotation=1, rect_shape=[.25, 1.2, 1.75, 1.5]):
+    plt.style.use('ggplot')
 
-        df = stats.combine().sort_values('MP', ascending=False).head(top_n)
-        X1 = np.array(df[X_name])
-        X = X1.astype(float)
-        y = np.array(df['Salary']).astype(float)
-        y_range = range(0, 45, 5)
-        cmap = cmap(minmax_scale(X)-.1)
-        ax1.scatter(X, y, s=10, c=cmap)
+    cmap = cm.get_cmap('plasma')
+    ax1 = plt.axes(rect_shape)
 
-        com_top = df.sort_values(X_name, ascending=False).head(3)
-        names = [i for i in com_top.index][::-1]
-        array = np.array(df[X_name])
-        array_sort = (array.argsort()[-3:]).astype(int)
+    df = stats.combine().sort_values('MP', ascending=False).head(top_n)
+    X1 = np.array(df[X_name])
+    X = X1.astype(float)
+    y = np.array(df['Salary']).astype(float)
+    y_range = range(0, 45, 5)
+    cmap = cmap(minmax_scale(X)-.1)
+    ax1.scatter(X, y, s=15, c=cmap)
+    
+    xticks = ax1.get_xticklabels()
+    plt.setp(xticks, rotation=45)
+    ax1.plot(np.unique(X), np.poly1d(np.polyfit(X, y, 1))(np.unique(X)))
+    ax1.set(yticklabels=y_range, xlabel=X_name, ylabel='Salary (millions)', 
+            title="{} vs. Salary".format(X_name))
 
-        for i, x_idx in enumerate(array_sort):
-            ax1.annotate(names[i], (X1[x_idx], y[x_idx]))
+    if annotation is not None:
+        if isinstance(annotation, str):
+            try:
+                player_idx = df.index.get_loc(annotation)
+                ax1.annotate(annotation, (X[player_idx], y[player_idx]), xytext=(-10,-10),
+                            textcoords='offset pixels', size=8)
+                
+            except Exception as e:
+                print('{} is not in the sample. Did you enter the name correctly?'.format(annotation))
+                print(e)
+            
+        if isinstance(annotation, int):
+            df_top = df.sort_values(X_name, ascending=False).head(annotation)
+            df_bottom = df.sort_values(X_name, ascending=True).head(annotation)
+            names_top = [i for i in df_top.index][::-1]
+            names_bottom = [i for i in df_bottom.index]
+            array = np.array(df[X_name])
+            X_top = (array.argsort()[-annotation:]).astype(int) 
+            X_bottom = (array.argsort()[:annotation].astype(int))
+            new_names_top = []
+            new_names_bottom = []
+            
+            for i in names_top:
+                name = i.split(' ')
+                new_names_top.append(name[0][0] + ' .' + name[1])
+                
+            for i in names_bottom:
+                name = i.split(' ')
+                new_names_bottom.append(name[0][0] + ' .' + name[1])
+
+            array = np.array(df[X_name])
+            array_sort = (array.argsort()[-3:]).astype(int)
+
+            for i, x_idx in enumerate(X_top):
+                ax1.annotate(new_names_top[i], xy=(X[x_idx], y[x_idx]), xytext=(-10,-10),
+                        arrowprops=dict(arrowstyle='->'), textcoords='offset pixels', size=8) 
+            for i, x_idx in enumerate(X_bottom):
+                ax1.annotate(new_names_bottom[i], xy=(X[x_idx], y[x_idx]), xytext=(-10,-10),
+                        arrowprops=dict(arrowstyle='->'), textcoords='offset pixels', size=8) 
 
 
-        xticks = ax1.get_xticklabels() #get tick labels so we can adjust them a bit with .setp
-        plt.setp(xticks, rotation=45)
-        ax1.plot(np.unique(X), np.poly1d(np.polyfit(X, y, 1))(np.unique(X)))
-        
-        ax1.set(yticklabels=y_range, xlabel=X_name, ylabel='Salary (millions)', 
-                title="{} vs. Salary".format(X_name));
+
 class MultiSeasonStats(SingleSeasonStats):
     def __init__(self, start_year, year):
         super().__init__(year)
