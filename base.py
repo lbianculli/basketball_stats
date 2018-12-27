@@ -89,7 +89,7 @@ class SingleSeasonStats():
         return adv_df
 
     @functools.lru_cache(maxsize=32)
-    def combine(self, drop_no_contract=True): 
+    def combine(self, drop_no_contract=True): #if really wanted could set year here (as w/ others) and reset inside. Has to be a better way
         '''
         Tries to combine adv and basic DFs. Otherwise returns just basic
         '''
@@ -118,30 +118,23 @@ class SingleSeasonStats():
             
             return basic_df
         
-        
-    def _gen_all_nba(self):
-        '''
-        Generates, returns, and caches the all-nba player list of input year
-        '''
-        url = 'https://www.basketball-reference.com/leagues/NBA_' + str(self.year)+'.html'
-        soup = bs.BeautifulSoup(requests.get(url).text, 'lxml')
-        all_nba = soup.find('div', id='all_honors')
-        players = re.findall(r"'>(\w*[-\s]\w*['\s-]*\w*)", str(all_nba))
-        
-        self.all_nba_dict[self.year] = players
-
     def _all_nba_label(self, df):
         '''
         returns new df with binary colum indicating whether player made all-nba that year.
         Compares takes from cache if function has been run previously
         '''
         if ~(self.year in self.all_nba_dict):
-            self._gen_all_nba()
+            url = 'https://www.basketball-reference.com/leagues/NBA_' + str(self.year)+'.html'
+            soup = bs.BeautifulSoup(requests.get(url).text, 'lxml')
+            all_nba = soup.find('div', id='all_honors')
+            players = re.findall(r"'>(\w*[-\s]\w*['\s-]*\w*)", str(all_nba))
 
-        df['all_nba'] = 0
+            self.all_nba_dict[self.year] = players
+
+        df['all_nba'] = 'no'
         for player in df.index:
             if player in self.all_nba_dict[self.year]:
-                df['all_nba'].loc[player] = 1
+                df['all_nba'].loc[player] = 'yes'
         
         return df
     
@@ -163,11 +156,10 @@ class SingleSeasonStats():
         if self.year == self.current_year:
             salary_df['contract_year'] = np.where(salary_df['2019-20'] == '', 'yes', 'no') #or however its returned.
             current_salary = salary_df[['current_salary', 'contract_year']]   #would need to change later addition to pd.concat as well.
-            
-        
+
         return current_salary
     
-    def salary_comparison(self, X_name, top_n=50, annotation=1, rect_shape=[.25, 1.2, 1.75, 1.5]): 
+    def salary_comparison(self, X_name, top_n=100, annotation=1, rect_shape=[.25, 1.2, 1.75, 1.5]): #maybe have annotations default to some int value
         plt.style.use('ggplot')
 
         cmap = cm.get_cmap('plasma')
@@ -181,7 +173,7 @@ class SingleSeasonStats():
         ax1.scatter(X, y, s=20, c=cmap)
 
 
-        xticks = ax1.get_xticklabels()
+        xticks = ax1.get_xticklabels() #get tick labels so we can adjust them a bit with .setp
         plt.setp(xticks, rotation=45)
 
         ax1.plot(np.unique(X), np.poly1d(np.polyfit(X, y, 1))(np.unique(X)))
@@ -211,11 +203,11 @@ class SingleSeasonStats():
 
                 for i in names_top:
                     name = i.split(' ')
-                    new_names_top.append(name[0][0] + ' .' + name[1])
+                    new_names_top.append(name[0][0] + '. ' + name[1])
 
                 for i in names_bottom:
                     name = i.split(' ')
-                    new_names_bottom.append(name[0][0] + ' .' + name[1])
+                    new_names_bottom.append(name[0][0] + '. ' + name[1])
 
                 array = np.array(df[X_name])
                 array_sort = (array.argsort()[-3:]).astype(int)
