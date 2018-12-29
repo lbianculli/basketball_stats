@@ -236,7 +236,7 @@ class MultiSeasonStats(SingleSeasonStats):
         pool = ThreadPool(25)
         df_container = pool.map(self.combine_multi, [season for season in season_range])
         final_df = pd.concat(df_container)
-        pool.close
+        pool.close()
 
         return final_df
 
