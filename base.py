@@ -5,7 +5,6 @@ import re
 import time
 import functools
 import numpy as np
-pd.options.mode.chained_assignment = None
 
 from utils import _gen_dataframe, remove_comment_tags
 
@@ -89,7 +88,7 @@ class SingleSeasonStats():
         return adv_df
 
     @functools.lru_cache(maxsize=32)
-    def combine(self, drop_no_contract=True): #if really wanted could set year here (as w/ others) and reset inside. Has to be a better way
+    def combine(self, drop_no_contract=True): 
         '''
         Tries to combine adv and basic DFs. Otherwise returns just basic
         '''
@@ -154,12 +153,11 @@ class SingleSeasonStats():
         salary_df = pd.DataFrame(index=players, columns=cols, data=data)
         salary_df['current_salary'] = current_salary = salary_df['2018-19'].astype(int)
         if self.year == self.current_year:
-            salary_df['contract_year'] = np.where(salary_df['2019-20'] == '', 'yes', 'no') #or however its returned.
-            current_salary = salary_df[['current_salary', 'contract_year']]   #would need to change later addition to pd.concat as well.
-
+            salary_df['contract_year'] = np.where(salary_df['2019-20'] == '', 'yes', 'no')
+            current_salary = salary_df[['current_salary', 'contract_year']]  
         return current_salary
     
-    def salary_comparison(self, X_name, top_n=100, annotation=1, rect_shape=[.25, 1.2, 1.75, 1.5]): #maybe have annotations default to some int value
+    def salary_comparison(self, X_name, top_n=100, annotation=1, rect_shape=[.25, 1.2, 1.75, 1.5]): 
         plt.style.use('ggplot')
 
         cmap = cm.get_cmap('plasma')
@@ -173,7 +171,7 @@ class SingleSeasonStats():
         ax1.scatter(X, y, s=20, c=cmap)
 
 
-        xticks = ax1.get_xticklabels() #get tick labels so we can adjust them a bit with .setp
+        xticks = ax1.get_xticklabels() #
         plt.setp(xticks, rotation=45)
 
         ax1.plot(np.unique(X), np.poly1d(np.polyfit(X, y, 1))(np.unique(X)))
@@ -214,13 +212,12 @@ class SingleSeasonStats():
 
                 for i, x_idx in enumerate(X_top):
                     ax1.annotate(new_names_top[i], xy=(X[x_idx], y[x_idx]), xytext=(-10,-10),
-                            arrowprops=dict(arrowstyle='->'), textcoords='offset pixels', size=8) #arrowprops not working as intended
+                            arrowprops=dict(arrowstyle='->'), textcoords='offset pixels', size=8) 
 
                 for i, x_idx in enumerate(X_bottom):
                     ax1.annotate(new_names_bottom[i], xy=(X[x_idx], y[x_idx]), xytext=(-10,-10),
-                            arrowprops=dict(arrowstyle='->'), textcoords='offset pixels', size=8) #arrowprops not working as intended
-
-
+                            arrowprops=dict(arrowstyle='->'), textcoords='offset pixels', size=8) 
+                    
 
 class MultiSeasonStats(SingleSeasonStats):
     def __init__(self, start_year, year):
