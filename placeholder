@@ -1,5 +1,7 @@
 # going to make sure it works as intended just converting lists to arrays before i figure out where to type check
-# but I think it would hae to be after the creation of the DF. Could i do array + td.get_text()? Transpositions?
+# but I think it would hae to be after the creation of the DF. 
+# first test by returning just data to see if thats as intended/what to change -- should i do array + td.get_text()? .T?
+# make sure caches are cleared before running tests.
 
 def _gen_dataframe(url): 
     '''
@@ -38,3 +40,17 @@ def _gen_dataframe(url):
 #             pass
     
     return df
+    
+    
+start = 1990
+end = 2000
+array_test = []
+list_test = []
+
+for year in range(start, end):
+    start_time = time.time()
+    combine(year)
+    time_taken = time.time() - start_time
+    print("Time taken for year {}: {}".format(year, time_taken)
+    array_test.append((year, time_taken))
+#    list_test.append((year, time_taken))
