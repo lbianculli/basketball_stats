@@ -1,0 +1,40 @@
+# going to make sure it works as intended just converting lists to arrays before i figure out where to type check
+# but I think it would hae to be after the creation of the DF. Could i do array + td.get_text()? Transpositions?
+
+def _gen_dataframe(url): 
+    '''
+    Boilerplate DF generator
+    '''
+    cols = []
+    soup = bs.BeautifulSoup(requests.get(url).text, 'lxml')
+    table = soup.find('div', class_='table_outer_container')
+
+    for th in table.thead.find_all('th'):
+        if th.get_text() == '\xa0':
+            cols.append('x')
+        else:
+            cols.append(th.get_text())
+
+    n_cols = len(table.thead.find_all('th')) - 1
+    data = np.array([td.get_text() for tr in table.tbody.find_all('tr', class_='full_table') 
+                     for td in tr.find_all('td')])
+
+#     for i in range(len(data)): #ORIGINAL
+#         try:
+#             data[i] = float(data[i])
+
+#         except Exception as e: #cant convert ... to float
+#             data[i] = data[i]
+
+    data = np.array([data[i:i+n_cols] for i in range(0, len(data), n_cols)])
+    all_players = [sublist.pop(0).replace('*', '') for sublist in data]
+    cols = cols[2:]
+    df = pd.DataFrame(index=all_players, data=data, columns=cols)
+
+#     for col in df.columns:
+#         try:
+#             df[column] = df[column].astype(float)
+#         except Exception as e:
+#             pass
+    
+    return df
