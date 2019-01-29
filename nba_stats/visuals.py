@@ -7,15 +7,16 @@ import seaborn as sns
 class PlotSeason():
     sns.set()
     
-    def __init__(self, data): 
+    def __init__(self, data, figsize=(16,5)): 
         self.data = data
+        self.figsize = figsize
         
     def scatter_plot(self, X_name, y_name, top_n=None, best_fit=True,
-                          annotation=1, figsize=(16,6)):
+                          annotation=1):
         
         cmap = cm.get_cmap('plasma')
 
-        plt.figure(figsize=figsize)
+        plt.figure(figsize=self.figsize)
 
         left = bottom =.25
         width = .5
@@ -84,19 +85,16 @@ class PlotSeason():
                     
                     
     def joint_plot(self, X_name, y_name, best_fit=True, top_n=150,
-                   kde=True, figsize=(15,5)): 
+                   kde=True, ): 
         
-
         cmap = cm.get_cmap('plasma')
-
-        plt.figure(figsize=figsize)
-
+        plt.figure(figsize=self.figsize)
+        
         left = bottom =.25
         width = .5
         height = 1
         left_hist = width + .25
         bottom_hist = height + .25
-
         axes_shape = [left, bottom, width, height]
         histx_shape = [left, bottom_hist, width, .11]
         histy_shape = [left_hist, bottom, .075, height]
@@ -117,7 +115,6 @@ class PlotSeason():
         ax_histy.axis('off')
 
 
-
         xticks = ax1.get_xticklabels()
         plt.setp(xticks, rotation=45)
 
@@ -131,7 +128,7 @@ class PlotSeason():
         """
         Creates multiple scatter plots based on [categorical] labels col_name and hue. Either can be specified.
         """
-        
+        plt.figure(figsize=self.figsize)
         data = self.data.sort_values('MP', ascending=False).head(top_n)
         data[X_name] = data[X_name].astype(float)
         data[y_name] = data[y_name].astype(float)
