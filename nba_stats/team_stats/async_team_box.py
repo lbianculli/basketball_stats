@@ -7,66 +7,31 @@ import datetime
 from collections import defaultdict
 import asyncio
 
-def make_hash():
-    return defaultdict(make_hash)
-
-
-data_dict = make_hash()
-score_dict = make_hash()
-
-team_id_dict = {
-    'Atlanta Hawks' : [1610612737, 'ATL'],
-    'Boston Celtics': [1610612738, 'BOS'],
-    'Brooklyn Nets': [1610612751, 'BKN'],
-    'Charlotte Hornets': [1610612766, 'CHA'],
-    'Chicago Bulls': [1610612741, 'CHI'],
-    'Cleveland Cavaliers': [1610612739, 'CLE'],
-    'Dallas Mavericks': [1610612742, 'DAL'],
-    'Denver Nuggets': [1610612743, 'DEN'],
-    'Detroit Pistons': [1610612765, 'DET'],
-    'Golden State Warriors': [1610612744, 'GSW'],
-    'Houston Rockets': [1610612745, 'HOU'],
-    'Indiana Pacers': [1610612754, 'IND'],
-    'LA Clippers':[1610612746, 'LAC'],
-    'Los Angeles Lakers': [1610612747, 'LAL'],
-    'Memphis Grizzlies': [1610612763, 'MEM'],
-    'Miami Heat': [1610612748, 'MIA'],
-    'Milwaukee Bucks': [1610612749, 'MIL'],
-    'Minnesota Timberwolves': [1610612750, 'MIN'],
-    'New Orleans Pelicans': [1610612740, 'NOP'],
-    'New York Knicks': [1610612752, 'NYK'],
-    'Oklahoma City Thunder': [1610612760, 'OKC'],
-    'Orlando Magic': [1610612753, 'ORL'],
-    'Philadelphia 76ers': [1610612755, 'PHI'],
-    'Phoenix Suns': [1610612756, 'PHO'],
-    'Portland Trail Blazers': [1610612757, 'POR'],
-    'Sacramento Kings': [1610612758, 'SAC'],
-    'San Antonio Spurs': [1610612759, 'SAS'],
-    'Toronto Raptors': [1610612761, 'TOR'],
-    'Utah Jazz': [1610612762, 'UTA'],
-    'Washington Wizards': [1610612764, 'WAS'],
-}
-
 headers = {
 
     'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML like Gecko) Chrome/72.0.3626.81 Safari/537.36',
 }
 
 def remove_comment_tags(url, timeout=10):
-    '''takes an input url and returns the DOM tree w/o comment tags wrapping the tables'''
+    """
+    takes an input url and returns the DOM tree w/o comment tags wrapping the tables
+    """
     resp = requests.get(url, timeout=timeout)
+
+    #remove the opening comment tag
     no_open_tag = resp.text.replace("""<!--\n   <div class="table_outer_container">""",
                                     """<div class="table_outer_container">""")
+    #remove closing comment tag
     no_close_tag = no_open_tag.replace("""</div>\n-->""","</div>")
 
     return no_close_tag
 
 
 async def team_basic_box(url, filter_=True):
-    ''' Scrapes NBA api for basic box score data'''
+    ''' returns DF of basic box data for all teams at given date. Dont really need '''
+
     try:
-        resp = requests.get(url, headers=headers,timeout=10)
-        resp.raise_for_status()
+        resp = requests.get(url, headers=headers,timeout=5)
         stats = resp.json()
         col_names = stats['resultSets'][0]['headers']
         col_names.remove('TEAM_NAME')
@@ -75,7 +40,7 @@ async def team_basic_box(url, filter_=True):
         df = pd.DataFrame(index=team_names, data=data, columns=col_names)
 
         if filter_ is True:  # use team id to map between DFs
-            keep_cols = df.columns.to_series()[['TEAM_ID', 'GP', 'PTS', 'AST', 'REB', 'STL', 'BLK']]
+            keep_cols = df.columns.to_series()[['TEAM_ID', 'GP', 'STL', 'BLK']]  
             df = df[keep_cols]
 
         return df
@@ -86,10 +51,9 @@ async def team_basic_box(url, filter_=True):
 
 
 async def team_advanced_box(url, filter_=True):
-    ''' Scrapes NBA api for advanced box score data'''
+    ''' returns DF of advanced box score for all teams at given date '''
     try:
-        resp = requests.get(url, headers=headers,timeout=10)
-        resp.raise_for_status()
+        resp = requests.get(url, headers=headers,timeout=5)
         stats = resp.json()
         col_names = stats['resultSets'][0]['headers']
         col_names.remove('TEAM_NAME')
@@ -98,7 +62,7 @@ async def team_advanced_box(url, filter_=True):
         df = pd.DataFrame(index=team_names, data=data, columns=col_names)
 
         if filter_ is True:
-            keep_cols = df.columns.to_series()[['TEAM_ID', 'GP', 'W_PCT', 'OFF_RATING',
+            keep_cols = df.columns.to_series()[['TEAM_ID', 'GP', 'W_PCT', 'OFF_RATING', 'PACE',
                                                 'DEF_RATING', 'AST_TO', 'OREB_PCT', 'DREB_PCT', 'TS_PCT']]
             df = df[keep_cols]
 
@@ -109,11 +73,61 @@ async def team_advanced_box(url, filter_=True):
 
 
 
+async def gen_offense(url, filter_=True):
+    ''' returns DF of general offense data for all teams at given date '''
+    try:
+        resp = requests.get(url, headers=headers,timeout=5).json()
+        offense_results = resp['resultSets']  # where this dict will be the json
+        cols = offense_results[0]['headers']
+        cols.remove('TEAM_NAME')
+        data = offense_results[0]['rowSet']
+        team_names = [team.pop(1) for team in data]
+        offense_df = pd.DataFrame(index=team_names, data=data, columns=cols)
+        offense_df = offense_df.drop(['FGA_FREQUENCY', 'FGM', 'FGA', 'FG_PCT', 'EFG_PCT', 'FG2M', 'FG2A', 'FG3M', 'FG3A'], axis=1)
+
+        return offense_df
+
+    except Exception as e:
+        print(e)
+
+
+async def gen_defense(two_pt_url, three_pt_url):
+    ''' Scrapes two URLs for 2pt and 3pt defense, returns combined DF '''
+    try:
+        resp1 = requests.get(two_pt_url, headers=headers, timeout=5).json()
+        two_pt_results = resp1['resultSets']  # where this dict will be the json
+        two_pt_cols = two_pt_results[0]['headers']
+        two_pt_cols.remove('TEAM_NAME')
+        two_pt_data = two_pt_results[0]['rowSet']
+        two_pt_names = [team.pop(1) for team in two_pt_data]
+        two_pt_df = pd.DataFrame(index=two_pt_names, data=two_pt_data, columns=two_pt_cols)
+        two_pt_df.columns = ['TEAM_ID', 'TEAM_ABBREVIATION', 'GP', 'G',
+                'FREQ2', 'FG2M', 'FG2A', 'FG2_PCT', 'NS_FG2_PCT', 'PLUSMINUS2']
+        two_pt_df = two_pt_df.drop(['FG2M', 'FG2A', 'TEAM_ID', 'TEAM_ABBREVIATION', 'GP', 'G'], axis=1)
+
+
+        resp2 = requests.get(three_pt_url, headers=headers, timeout=5).json()
+        three_pt_results = resp2['resultSets']  # where this dict will be the json
+        three_pt_cols = three_pt_results[0]['headers']
+        three_pt_cols.remove('TEAM_NAME')
+        three_pt_data = three_pt_results[0]['rowSet']
+        three_pt_names = [team.pop(1) for team in three_pt_data]
+        three_pt_df = pd.DataFrame(index=three_pt_names, data=three_pt_data, columns=three_pt_cols)
+        three_pt_df.columns = ['TEAM_ID', 'TEAM_ABBREVIATION', 'GP', 'G',
+                                  'FREQ3', 'FG3M', 'FG3A', 'FG3_PCT', 'NS_FG3_PCT', 'PLUSMINUS3']
+        three_pt_df = three_pt_df.drop(['FG3M', 'FG3A'], axis=1)
+
+        combined_defense_df = pd.concat([two_pt_df, three_pt_df], axis=1)
+
+        return combined_defense_df
+
+    except Exception as e:
+        print(e)
+
 
 async def bref_box(url):
-    ''' scrapes bref for daily box score data (teams and scores) '''
+
     resp = remove_comment_tags(url)
-    resp.raise_for_status()
     soup = bs.BeautifulSoup(resp, 'lxml')
 
     try:
@@ -138,77 +152,89 @@ async def bref_box(url):
         return df
 
     except Exception as e:
-        print(e)
+        # print(e)
         print('Likely no games on this date')
 
 
 def generate_season(season):
-    ''' creates date format in prep for data consolidation'''
-    start_date = '12-01-' + season[:4]  # add ~ a month to get 20 game threshold
+
+    start_date = '11-15-' + season[:4]  # add ~ a month to get 20 game threshold. *could* be done w/ timedelta
     start = datetime.datetime.strptime(start_date, '%m-%d-%Y')
     today = datetime.datetime.today()
     today = datetime.datetime.strftime(today, '%m-%d-%Y')
 
     if season == '2018-19':
         end = datetime.datetime.strptime(today, '%m-%d-%Y')
-    else:  # this needs to be better
-        end = '04-15-20' + season[-2:]  # latest game seemed to be around this time
+    else:
+        end = '04-20-20' + season[-2:]  # latest game seemed to be around this time
         end = datetime.datetime.strptime(end, '%m-%d-%Y')
 
     date_range = end - start
     date_list = [end - datetime.timedelta(days=x) for x in range(1, date_range.days)]
+
     return date_list
 
 
 async def get_data(date, season):
-    ''' consolidates data, stores in a dict'''
+     ''' combines all the above, stores data in two dicts'''
+
     curr_date = date.date().__str__()
     year = curr_date[:4]
     month = curr_date[5:7]
     day = curr_date[-2:]
 
     api_basic_url = f'https://stats.nba.com/stats/leaguedashteamstats?Conference=&DateFrom=&DateTo={curr_date}&Division=&GameScope=&GameSegment=&LastNGames=0&LeagueID=&Location=&MeasureType=Base&Month=0&OpponentTeamID=0&Outcome=&PORound=&PaceAdjust=N&PerMode=Totals&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&Season={season}&SeasonSegment=&SeasonType=Regular+Season&ShotClockRange=&StarterBench=&TeamID=&TwoWay=&VsConference=&VsDivision=&'
+
     api_advanced_url = f'https://stats.nba.com/stats/leaguedashteamstats?Conference=&DateFrom=&DateTo={curr_date}&Division=&GameScope=&GameSegment=&LastNGames=0&LeagueID=&Location=&MeasureType=Advanced&Month=0&OpponentTeamID=0&Outcome=&PORound=&PaceAdjust=N&PerMode=Totals&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&Season={season}&SeasonSegment=&SeasonType=Regular+Season&ShotClockRange=&StarterBench=&TeamID=&TwoWay=&VsConference=&VsDivision=&'
+
+    two_pt_url = f'https://stats.nba.com/stats/leaguedashptteamdefend?Conference=&DateFrom=&DateTo={curr_date}&DefenseCategory=2%20Pointers&Division=&GameSegment=&LastNGames=&LeagueID=00&Location=&Month=&OpponentTeamID=&Outcome=&PORound=&PerMode=Totals&Period=&Season={season}&SeasonSegment=&SeasonType=Regular+Season&TeamID=&VsConference=&VsDivision='
+
+    three_pt_url = f'https://stats.nba.com/stats/leaguedashptteamdefend?Conference=&DateFrom=&DateTo={curr_date}&DefenseCategory=3%20Pointers&Division=&GameSegment=&LastNGames=&LeagueID=00&Location=&Month=&OpponentTeamID=&Outcome=&PORound=&PerMode=Totals&Period=&Season={season}&SeasonSegment=&SeasonType=Regular+Season&TeamID=&VsConference=&VsDivision='
+
+    general_offense_url = f'https://stats.nba.com/stats/leaguedashteamptshot?CloseDefDistRange=&Conference=&DateFrom=&DateTo={curr_date}&Division=&DribbleRange=&GameSegment=&GeneralRange=&LastNGames=&LeagueID=00&Location=&Month=&OpponentTeamID=&Outcome=&PORound=&PerMode=Totals&Period=&Season={season}&SeasonSegment=&SeasonType=Regular+Season&ShotClockRange=&ShotDistRange=&TeamID=&TouchTimeRange=&VsConference=&VsDivision='
+
     bref_url = f'https://www.basketball-reference.com/boxscores/?month={month}&day={day}&year={year}'
 
-    basic_df = await team_basic_box(api_basic_url) 
+
+    basic_df = await team_basic_box(api_basic_url)  
     advanced_df = await team_advanced_box(api_advanced_url)  
-    basic_df = basic_df.loc[basic_df['GP'] >= 20]
-    advanced_df = advanced_df.loc[advanced_df['GP'] >= 20]
+    defense_df = await gen_defense(two_pt_url, three_pt_url)
+    offense_df = await gen_offense(general_offense_url)
 
-    if advanced_df.shape[0] == 30 and basic_df.shape[0] == 30:
-        data_dict[curr_date]['advanced'] = advanced_df
-        data_dict[curr_date]['basic'] = basic_df
+    try:
+        basic_df = basic_df.loc[basic_df['GP'] >= 20]
+        advanced_df = advanced_df.loc[advanced_df['GP'] >= 20]
+        defense_df = defense_df.loc[defense_df['GP'] >= 20]
+        offense_df = offense_df.loc[offense_df['GP'] >= 20]
 
-        try:
-            df = await (bref_box(bref_url))  # i think if an async function calls another it needs an await?
-            score_dict[curr_date] = df
+        if advanced_df.shape[0] == 30 and basic_df.shape[0] == 30 and defense_df.shape[0] == 30 and offense_df.shape[0] == 30:
+            data_dict[curr_date] = [basic_df, advanced_df, defense_df, offense_df]
 
-        except Exception as e:
-            print(f'No games played on {start}')
+            score_df = await (bref_box(bref_url))  
+            score_dict[curr_date] = score_df
 
+    except Exception as e:
+        print(e)
 
-    print(season, 'completed!')
     return
 
 async def main():
-    ''' runs above asynchronously for an entire season '''
-    season = '2018-19'
+    season = '2014-15'
     date_list = generate_season(season)
     tasks = []
     for date in date_list:
         tasks.append(asyncio.create_task(get_data(date, season)))
 
     await asyncio.wait([task for task in tasks])
+    print(f'{season} completed!')
 
 
 if __name__ == '__main__':
     try:
-        loop = asyncio.get_event_loop()  # even loop runs tasks one after another
+        loop = asyncio.get_event_loop()  
         loop.run_until_complete(main())
-        # asyncio.run(main())
 
-    except RuntimeError as e:  # should log dates here at least, potentially rerun
+    except RuntimeError as e:  # All-star break dates
         print(e)
 
     finally:
