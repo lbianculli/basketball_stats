@@ -16,6 +16,7 @@ import sys
 
 BUCKET_NAME = 'xgboost-420'
 
+
 #has to be google cloud dir
 with open('/home/lbianculli123/xgboost_trainer/all_data-420.pkl', 'rb') as f:
     all_data = pickle.load(f)
