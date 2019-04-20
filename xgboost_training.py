@@ -15,35 +15,9 @@ import subprocess
 import sys
 
 BUCKET_NAME = 'xgboost-420'
-
-
 with open('/home/lbianculli/tensorflow_projects/nba_data/pickles/all_data-420.p', 'rb') as f:
     all_data = pickle.load(f)
-
-
-def kfold_cv(data, labels, clf, n_folds=5):
-    '''
-    runs kfold CV and returns some regression metrics
-    data: training data without labels
-    labels: training labels
-    '''
-    kf = KFold(n_folds, shuffle=True)
-    MSEs = []
-    MAEs = []
-
-    for train_idx, test_idx in kf.split(data, labels):
-        train_data, test_data = data[train_idx], data[test_idx]
-        train_labels, test_labels = labels[train_idx], labels[test_idx]
-        clf.fit(train_data, train_labels)
-        y_pred = clf.predict(test_data)
-
-        MSEs.append(metrics.mean_squared_error(test_labels, y_pred))
-        MAEs.append(metrics.mean_absolute_error(test_labels, y_pred))
-
-    print('MSE: ', np.mean(MSEs).round(4))
-    print('MAE: ', np.mean(MAEs).round(4))
-    return mses, maes
-
+    
 train_data = all_data.sample(frac=.8)
 test_data = all_data.drop(train_data.index)
 
