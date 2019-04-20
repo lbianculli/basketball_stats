@@ -15,7 +15,9 @@ import subprocess
 import sys
 
 BUCKET_NAME = 'xgboost-420'
-with open('/home/lbianculli/tensorflow_projects/nba_data/pickles/all_data-420.p', 'rb') as f:
+
+#has to be google cloud dir
+with open('/home/lbianculli123/xgboost_trainer/all_data-420.pkl', 'rb') as f:
     all_data = pickle.load(f)
     
 train_data = all_data.sample(frac=.8)
