@@ -18,7 +18,7 @@ BUCKET_NAME = 'xgboost-420'
 
 #has to be google cloud dir
 with open('/home/lbianculli123/xgboost_trainer/all_data-420.pkl', 'rb') as f:
-    all_data pickle.load(f)
+    all_data = pickle.load(f)
     
 train_data = all_data.sample(frac=.8)
 test_data = all_data.drop(train_data.index)
