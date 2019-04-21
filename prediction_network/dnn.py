@@ -1,10 +1,15 @@
-class deep_net(train_data, train_labels, valid_data, valid_labels, test_data, test_labels, scope,
-                lr=1e-3, n_epochs=50, batch_size=32, reuse=False, verbose=True):
+import tensorflow as tf
+from sklearn.decomposition import PCA
+import numpy as np
+import pandas as pd
+
+
+class deep_net():
     ''' 
     creates regression model with Tensorflow
     input_data: will take the training data and transform it into a tf.float32 placeholder
     '''
-    def __init__(self, all_data, learning_rate=1e-3, pca=True, reuse=False, logdir=None):
+    def __init__(self, all_data, learning_rate=1e-3, pca_components=None, reuse=False, logdir=None):
         self.all_data = all_data
         self.learning_rate = learning_rate
         self.pca = pca
@@ -39,13 +44,20 @@ class deep_net(train_data, train_labels, valid_data, valid_labels, test_data, te
         self.normed_valid_data = np.asarray((valid_data-np.mean(train_data, axis=0)) / np.std(train_data, axis=0), dtype=np.float64)
         
         if self.pca:
-            pca = PCA(n_components=30, whiten=True)
-            normed_train_data = pca.fit_transform(normed_train_data)
-            normed_test_data = pca.transform(normed_test_data)
-            normed_valid_data = pca.transform(normed_valid_data)
+            pca = PCA(n_components=self.pca_components, whiten=True)
+            self.normed_train_data = pca.fit_transform(normed_train_data)
+            self.normed_test_data = pca.transform(normed_test_data)
+            self.normed_valid_data = pca.transform(normed_valid_data)
 
         self.N_FEATURES = len(normed_train_data[1])
         self.N_SAMPLES = len(normed_train_data)
+        
+    def _activation_summary(self, _x):
+        ''' Creates summaries for activations. Returns nothing. '''
+        tensor_name = _x.op.name
+        tf.summary.histogram(tensor_name + '/activations', _x)
+        tf.summary.scalar(tensor_name + '/sparsity', 
+                          tf.nn.zero_fraction(_x))
         
         
     def _create_network(self, n_units=4)
@@ -55,20 +67,20 @@ class deep_net(train_data, train_labels, valid_data, valid_labels, test_data, te
 
         with tf.variable_scope('deep_network') as scope:
             out1 = tf.layers.dense(x, units=n_units, activation=tf.nn.relu)
-            _activation_summary(out1)
+            self._activation_summary(out1)
             out2 = tf.layers.dense(out1, units=n_units, activation=tf.nn.relu)
-            _activation_summary(out2)
+            self._activation_summary(out2)
             out3 = tf.layers.dense(out2, units=n_units, activation=tf.nn.relu)
-            _activation_summary(out3)
+            self._activation_summary(out3)
         
         if self.regression:
             with tf.variable_scope('predictions') as scope:
                 preds = tf.layers.dense(out3, units=1, activation=None)
-                _activation_summary(preds)
+                self._activation_summary(preds)
         else: 
             with tf.variable_scope('predictions') as scope:
                 preds = tf.layers.dense(out3, units=2, activation=None)
-                _activation_summary(preds)
+                self._activation_summary(preds)
         
         return preds
     
