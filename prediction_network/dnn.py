@@ -111,8 +111,8 @@ class deep_net():
 
             for epoch in range(1, n_epochs+1):
                 for batch in range(self.N_SAMPLES // batch_size): 
-                    batch_x = train_data[batch*batch_size: min((batch+1)*batch_size, self.N_SAMPLES)]
-                    batch_y = train_labels[batch*batch_size: min((batch+1)*batch_size, self.N_SAMPLES)]
+                    batch_x = self.normed_train_data[batch*batch_size: min((batch+1)*batch_size, self.N_SAMPLES)]
+                    batch_y = self.train_labels[batch*batch_size: min((batch+1)*batch_size, self.N_SAMPLES)]
 
                     train_opt = sess.run(optimizer, feed_dict={self.x: batch_x, y: batch_y})
                     train_loss, s = sess.run([loss, summ], feed_dict={self.x: batch_x, y: batch_y})  
@@ -152,8 +152,8 @@ class deep_net():
 
             for epoch in range(1, n_epochs+1):
                 for batch in range(self.N_SAMPLES // batch_size): 
-                    batch_x = train_data[batch*batch_size: min((batch+1)*batch_size, self.N_SAMPLES)]
-                    batch_y = train_labels[batch*batch_size: min((batch+1)*batch_size, self.N_SAMPLES)]
+                    batch_x = self.normed_train_data[batch*batch_size: min((batch+1)*batch_size, self.N_SAMPLES)]
+                    batch_y = self.train_labels[batch*batch_size: min((batch+1)*batch_size, self.N_SAMPLES)]
                     
                     train_opt = sess.run(optimizer, feed_dict={self.x: batch_x, self.y: batch_y})
                     train_loss, train_acc, s = sess.run([loss, acc, summ], feed_dict={self.x: batch_x, self.y: batch_y})  
