@@ -2,14 +2,16 @@ import tensorflow as tf
 from sklearn.decomposition import PCA
 import numpy as np
 import pandas as pd
-
+import seaborn as sns; sns.set()
 
 class deep_net():
     ''' 
-    creates regression model with Tensorflow
-    input_data: will take the training data and transform it into a tf.float32 placeholder
+    creates deep model with Tensorflow
+    Think I would rather do training/testing instead of all data. can then split off validation set in class
+    
     '''
-    def __init__(self, all_data, learning_rate=1e-3, pca_components=None, reuse=False, logdir=None):
+    def __init__(self, train_data, all_data, 
+                 learning_rate=1e-3, pca_components=None, reuse=False, logdir=None):
         self.all_data = all_data
         self.learning_rate = learning_rate
         self.pca = pca
@@ -17,7 +19,7 @@ class deep_net():
         self.LOGDIR = logdir
         
         
-    def _format_data(self, label_name='home_win'):
+    def _format_data(self, label_name='home_win')
         if label_name = 'home_win':
             self.regression = False
             
@@ -60,8 +62,11 @@ class deep_net():
                           tf.nn.zero_fraction(_x))
         
         
-    def _create_network(self, n_units=4)
-    
+    def _create_network(self, n_units=4):
+        '''
+        setup graph for network. returns output depending on if it is a classification of regression
+        n_units: number of units in each hidden layer
+        '''
         self.x = tf.cast(tf.placeholder(dtype=tf.float32, shape=[None, self.N_FEATURES], name='input'), tf.float32)
         self.y = tf.cast(tf.placeholder(dtype=tf.float32, shape=[None, 1], name='labels'), tf.float32)
 
@@ -83,6 +88,7 @@ class deep_net():
                 self._activation_summary(preds)
         
         return preds
+    
     
     def _train_regression(self, n_epochs=50, batch_size=32, reuse=False, verbose=True)
         preds = self._create_network()
@@ -112,8 +118,6 @@ class deep_net():
                     train_loss, s = sess.run([loss, summ], feed_dict={self.x: batch_x, y: batch_y})  
                     summary_writer.add_summary(s, batch)
 
-
-                # all validation samples 
                 valid_loss = sess.run(loss, feed_dict={self.x: self.valid_data, self.y: self.valid_labels}) 
                 train_losses.append(train_loss)
                 valid_losses.append(valid_loss)
@@ -141,27 +145,46 @@ class deep_net():
             saver = tf.train.Saver()
             summary_writer = tf.summary.FileWriter(self.LOGDIR + str(lr))
             summary_writer.add_graph(sess.graph)
-            train_losses = []
-            train_acc = []
-            valid_losses = []
-            valid_acc = []
-#             test_losses = []
-#             test_acc = []
+            self.train_losses = []
+            self.train_accs = []
+            self.valid_losses = []
+            self.valid_accs = []
 
             for epoch in range(1, n_epochs+1):
                 for batch in range(self.N_SAMPLES // batch_size): 
                     batch_x = train_data[batch*batch_size: min((batch+1)*batch_size, self.N_SAMPLES)]
                     batch_y = train_labels[batch*batch_size: min((batch+1)*batch_size, self.N_SAMPLES)]
-
-                    train_opt = sess.run(optimizer, feed_dict={self.x: batch_x, y: batch_y})
-                    train_loss, s = sess.run([loss, summ], feed_dict={self.x: batch_x, y: batch_y})  
+                    
+                    train_opt = sess.run(optimizer, feed_dict={self.x: batch_x, self.y: batch_y})
+                    train_loss, train_acc, s = sess.run([loss, acc, summ], feed_dict={self.x: batch_x, self.y: batch_y})  
                     summary_writer.add_summary(s, batch)
 
-
-                # all validation samples 
                 valid_loss = sess.run(loss, feed_dict={self.x: self.valid_data, self.y: self.valid_labels}) 
-                train_losses.append(train_loss)
-                valid_losses.append(valid_loss)
+                self.train_losses.append(train_loss)
+                self.valid_losses.append(valid_loss)
+                self.train_accs.append(train_acc)
+                self.valid_accs.append(valid_acc)
                 if epoch % 10 == 0 and verbose:
                     print(f'Epoch {epoch} train loss: {train_loss} \nValidation loss: {valid_loss}')
         print(f'\nTraining Complete! Run `tensorboard --logdir={self.LOGDIR+str(lr)}` to see the results.')
+        
+        
+    def plot_loss_curve(self, n_epochs=50):
+        ''' Not sure the best way to incorporate these) '''
+        x = range(n_epochs)
+        fig = plt.figure(figsize=(9,6))
+        plt.title('Training and Validation Loss')
+        plt.ylabel('Loss') 
+        plt.xlabel('Epochs')
+        plt.plot(x, self.train_losses, 'r', x, self.valid_losses, 'g')
+        plt.legend();
+        
+    def plot_accuracy_curve(self, n_epochs=50):
+        x = range(n_epochs)
+        fig = plt.figure(figsize=(9,6))
+        plt.title('Training and Validation Accuracy')
+        plt.ylabel('Accuracy') 
+        plt.xlabel('Epochs')
+        plt.plot(x, self.train_accs, 'r', x, self.valid_accs, 'g')
+        plt.legend();
+        
