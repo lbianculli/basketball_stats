@@ -90,7 +90,9 @@ class deep_net():
         return preds
     
     
-    def _train_regression(self, n_epochs=50, batch_size=32, reuse=False, verbose=True)
+    def _train_regression(self, n_epochs=50, batch_size=32, verbose=True)
+        if self.reuse is False:
+            tf.reset_default_graph()
         preds = self._create_network()
 
         with tf.variable_scope('loss') as scope:
@@ -126,7 +128,9 @@ class deep_net():
         print(f'\nTraining Complete! Run `tensorboard --logdir={self.LOGDIR+str(lr)}` to see the results.')
                                       
                                       
-    def _train_classification(self, n_epochs=50, batch_size=32, reuse=False, verbose=True)
+    def _train_classification(self, n_epochs=50, batch_size=32, verbose=True):
+        if self.reuse is False:
+            tf.reset_default_graph()
         preds = self._create_network()
 
         with tf.variable_scope('loss') as scope:
