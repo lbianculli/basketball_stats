@@ -90,7 +90,7 @@ class deep_net():
         return preds
     
     
-    def _train_regression(self, n_epochs=50, batch_size=32, verbose=True)
+    def _train_regression(self, n_epochs=50, batch_size=32, save=False, verbose=True)
         if self.reuse is False:
             tf.reset_default_graph()
         preds = self._create_network()
@@ -104,7 +104,7 @@ class deep_net():
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             summ = tf.summary.merge_all()
-            saver = tf.train.Saver()
+            saver = tf.train.Saver(max_to_keep=4)
             summary_writer = tf.summary.FileWriter(self.LOGDIR + str(lr))
             summary_writer.add_graph(sess.graph)
             train_losses = []
@@ -125,7 +125,11 @@ class deep_net():
                 valid_losses.append(valid_loss)
                 if epoch % 10 == 0 and verbose:
                     print(f'Epoch {epoch} train loss: {train_loss} \nValidation loss: {valid_loss}')
+            if save:
+                saver.save(sess, '/tmp/model.ckpt', global_step=25)
+                
         print(f'\nTraining Complete! Run `tensorboard --logdir={self.LOGDIR+str(lr)}` to see the results.')
+        
                                       
                                       
     def _train_classification(self, n_epochs=50, batch_size=32, verbose=True):
