@@ -2,197 +2,139 @@ import tensorflow as tf
 from sklearn.decomposition import PCA
 import numpy as np
 import pandas as pd
+import itertools
 import seaborn as sns; sns.set()
 
-class deep_net():
-    ''' 
-    creates deep model with Tensorflow
-    Think I would rather do training/testing instead of all data. can then split off validation set in class
-    
-    '''
-    def __init__(self, train_data, all_data, 
-                 learning_rate=1e-3, pca_components=None, reuse=False, logdir=None):
+
+class keras_clf():
+    def __init__(self, all_data, learning_rate=1e-3, pca_components=30):
         self.all_data = all_data
+        self.pca_components = pca_components
         self.learning_rate = learning_rate
-        self.pca = pca
-        self.reuse = reuse
-        self.LOGDIR = logdir
         
         
-    def _format_data(self, label_name='home_win')
-        if label_name = 'home_win':
-            self.regression = False
-            
-        pre_split_data = self.all_data.sample(frac=.8)
-        test_data = self.all_data.drop(pre_split_data.index)
-        train_data = pre_split_data.sample(frac=.8)
-        valid_data = pre_split_data.drop(train_data.index)
+    def _format_data(self, label_name='home_win'):
+        train_data = self.all_data.sample(frac=.8)
+        test_data = self.all_data.drop(train_data.index)
 
         train_labels = train_data[['home_win', 'margin', 'total_points']]
-        train_data = train_data.drop(train_labels, axis=1)  # these are the three possible labels
+        train_data = train_data.drop(train_labels, axis=1)  
+        
         test_labels = test_data[['home_win', 'margin', 'total_points']]
         test_data = test_data.drop(test_labels, axis=1)
-        valid_labels = valid_data[['home_win', 'margin', 'total_points']]
-        valid_data = valid_data.drop(valid_labels, axis=1)
+        
         train_labels = np.asarray(train_labels[label_name], dtype=np.float64)
         test_labels = np.asarray(test_labels[label_name], dtype=np.float64)
-        valid_labels = np.asarray(valid_labels[label_name], dtype=np.float64)
-        
-        self.train_labels = np.expand_dims(train_labels, axis=1)
-        self.test_labels = np.expand_dims(test_labels, axis=1)
-        self.valid_labels = np.expand_dims(valid_labels, axis=1)
-        self.normed_train_data = np.asarray((train_data-np.mean(train_data, axis=0)) / np.std(train_data, axis=0), dtype=np.float64)
-        self.normed_test_data = np.asarray((test_data-np.mean(train_data, axis=0)) / np.std(train_data, axis=0), dtype=np.float64)
-        self.normed_valid_data = np.asarray((valid_data-np.mean(train_data, axis=0)) / np.std(train_data, axis=0), dtype=np.float64)
-        
-        if self.pca:
-            pca = PCA(n_components=self.pca_components, whiten=True)
-            self.normed_train_data = pca.fit_transform(normed_train_data)
-            self.normed_test_data = pca.transform(normed_test_data)
-            self.normed_valid_data = pca.transform(normed_valid_data)
 
+        train_labels = np.expand_dims(train_labels, axis=1)
+        self.test_labels = np.expand_dims(test_labels, axis=1)
+        normed_train_data = np.asarray((train_data-np.mean(train_data, axis=0)) / np.std(train_data, axis=0), dtype=np.float64)
+        self.normed_test_data = np.asarray((test_data-np.mean(train_data, axis=0)) / np.std(train_data, axis=0), dtype=np.float64)
+        
+        if self.pca_components:
+            pca = PCA(n_components=self.pca_components, whiten=True)
+            normed_train_data = pca.fit_transform(normed_train_data)
+            self.normed_test_data = pca.transform(self.normed_test_data)
+            
+        sm = SMOTE()
+        self.normed_train_data = pca.fit_transform(normed_train_data)
+        
         self.N_FEATURES = len(normed_train_data[1])
         self.N_SAMPLES = len(normed_train_data)
         
-    def _activation_summary(self, _x):
-        ''' Creates summaries for activations. Returns nothing. '''
-        tensor_name = _x.op.name
-        tf.summary.histogram(tensor_name + '/activations', _x)
-        tf.summary.scalar(tensor_name + '/sparsity', 
-                          tf.nn.zero_fraction(_x))
+        
+    def create_model(self, n_hidden, n_units, label_name='home_win'):
+        self._format_data(label_name)
+    
+        model = tf.keras.Sequential()
+        model.add(tf.keras.layers.Dense(2, activation=tf.nn.leaky_relu, input_shape=(self.N_FEATURES,)))
+        for l in range(n_hidden):
+            model.add(tf.keras.layers.Dense(2, activation=tf.nn.leaky_relu))
+        model.add(tf.keras.layers.Dense(2, activation=tf.nn.softmax))
+        model.compile(optimizer='Adam', loss=['sparse_categorical_crossentropy'], metrics=['accuracy'])
+        
+        self.model = model
         
         
-    def _create_network(self, n_units=4):
-        '''
-        setup graph for network. returns output depending on if it is a classification of regression
-        n_units: number of units in each hidden layer
-        '''
-        self.x = tf.cast(tf.placeholder(dtype=tf.float32, shape=[None, self.N_FEATURES], name='input'), tf.float32)
-        self.y = tf.cast(tf.placeholder(dtype=tf.float32, shape=[None, 1], name='labels'), tf.float32)
+    def train_model(self, epochs=100, batch_size=32, plot=False):
+        ''' Still need: graphs -- how to plot the train/val losses/accs? Also I probably need subplots '''
+        early_stop = keras.callbacks.EarlyStopping(monitor='val_loss', patience=20)
 
-        with tf.variable_scope('deep_network') as scope:
-            out1 = tf.layers.dense(x, units=n_units, activation=tf.nn.relu)
-            self._activation_summary(out1)
-            out2 = tf.layers.dense(out1, units=n_units, activation=tf.nn.relu)
-            self._activation_summary(out2)
-            out3 = tf.layers.dense(out2, units=n_units, activation=tf.nn.relu)
-            self._activation_summary(out3)
+        history = self.model.fit(self.normed_train_data, self.train_labels, epochs=epochs,
+                    validation_split=0.2, verbose=0, callbacks=[early_stop, PrintDot()])
         
-        if self.regression:
-            with tf.variable_scope('predictions') as scope:
-                preds = tf.layers.dense(out3, units=1, activation=None)
-                self._activation_summary(preds)
-        else: 
-            with tf.variable_scope('predictions') as scope:
-                preds = tf.layers.dense(out3, units=2, activation=None)
-                self._activation_summary(preds)
+        train_losses = history['loss']  # make sure these col names are correct
+        val_losses = history['val_loss']
+        train_accs = history['loss']
+        val_accs = history['val_acc']
         
-        return preds
+        if plot:  
+#             fig = plt.figure(figsize=(9,6))  # create fig in here?
+            self.plot_loss_curve(n_epochs, train_losses, val_losses)
+            self.plot_accuracy_curve(n_epochs, train_accs, val_accs)
+        
+        return history
     
     
-    def _train_regression(self, n_epochs=50, batch_size=32, save=False, verbose=True)
-        if self.reuse is False:
-            tf.reset_default_graph()
-        preds = self._create_network()
+    def architecture_search(self, hidden, units, learning_rates): 
+        '''
+        iterates through architectures given collections of hyperparams:
+        n_hidden: list of number of hidden layers
+        n_units: list of number of units in each hidden layer
+        learning_rate: list of optimizer learning rate
+        '''
+        results = []
+        mesh = list(itertools.product(n_units, n_hidden, learning_rates))
+        for param_combo in mesh:
+            for i in param_combo:
+                units = i[0]
+                hidden_layers = i[1]
+                learning_rate = [2]
 
-        with tf.variable_scope('loss') as scope:
-            loss = tf.losses.mean_squared_error(labels=self.y, predictions=preds)
- 
-        with tf.variable_scope('training') as scope: 
-            optimizer = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
-
-        with tf.Session() as sess:
-            sess.run(tf.global_variables_initializer())
-            summ = tf.summary.merge_all()
-            saver = tf.train.Saver(max_to_keep=4)
-            summary_writer = tf.summary.FileWriter(self.LOGDIR + str(lr))
-            summary_writer.add_graph(sess.graph)
-            train_losses = []
-            valid_losses = []
-            test_losses = []
-
-            for epoch in range(1, n_epochs+1):
-                for batch in range(self.N_SAMPLES // batch_size): 
-                    batch_x = self.normed_train_data[batch*batch_size: min((batch+1)*batch_size, self.N_SAMPLES)]
-                    batch_y = self.train_labels[batch*batch_size: min((batch+1)*batch_size, self.N_SAMPLES)]
-
-                    train_opt = sess.run(optimizer, feed_dict={self.x: batch_x, y: batch_y})
-                    train_loss, s = sess.run([loss, summ], feed_dict={self.x: batch_x, y: batch_y})  
-                    summary_writer.add_summary(s, batch)
-
-                valid_loss = sess.run(loss, feed_dict={self.x: self.valid_data, self.y: self.valid_labels}) 
-                train_losses.append(train_loss)
-                valid_losses.append(valid_loss)
-                if epoch % 10 == 0 and verbose:
-                    print(f'Epoch {epoch} train loss: {train_loss} \nValidation loss: {valid_loss}')
-            if save:
-                saver.save(sess, '/tmp/model.ckpt', global_step=25)
+                results.append(self._architecture_search(hidden_layers, units, learning_rate), param_combo) 
                 
-        print(f'\nTraining Complete! Run `tensorboard --logdir={self.LOGDIR+str(lr)}` to see the results.')
+        return results
+    
+    
+    def _architecture_search(self, hidden, units, learning_rate):  # create function that performs search, wrap in another that iterates via vectorize and ix_
+        ''' performs search of inidividual set of param values '''
+        early_stop = keras.callbacks.EarlyStopping(monitor='val_loss', patience=20)
+
+        model = keras.layers.Sequential()
+        model.add(keras.layers.Dense(units, activation=tf.nn.leaky_relu, input_shape=[self.N_FEATURES, ]))  # input layer
+        for i in range(hidden):
+            model.add(keras.layers.Dense(units, activation=tf.nn.leaky_relu))
+        model.add(keras.layers.Dense(1))  # ouput (for regression)
+     
+        opt = optimizers.Adam(lr=learning_rate, decay=None)
+        model.compile(optimizer=opt, loss=['mean_squared_error'], metrics=['mae'])
+        history = model.fit(self.normed_train_data, self.train_labels, epochs=200,
+                validation_split=0.2, verbose=0, callbacks=[early_stop, PrintDot()])
+
+        val_loss = np.mean(history.history['val_loss'][-1])
+        print(f'Units: {units}, hidden_layers: {hidden}, learning_rate: {learning_rate} -- Final Val loss: {val_loss}')
         
-                                      
-                                      
-    def _train_classification(self, n_epochs=50, batch_size=32, verbose=True):
-        if self.reuse is False:
-            tf.reset_default_graph()
-        preds = self._create_network()
-
-        with tf.variable_scope('loss') as scope:
-            loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.y, logits=preds))
-
-        with tf.variable_scope('training') as scope: 
-            optimizer = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
-                                  
-        with tf.variable_scope('accuracy') as scope:
-            correct_prediction = tf.equal(tf.argmax(preds, 1), tf.argmax(self.y, 1))
-            accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-
-        with tf.Session() as sess:
-            sess.run(tf.global_variables_initializer())
-            summ = tf.summary.merge_all()
-            saver = tf.train.Saver()
-            summary_writer = tf.summary.FileWriter(self.LOGDIR + str(lr))
-            summary_writer.add_graph(sess.graph)
-            self.train_losses = []
-            self.train_accs = []
-            self.valid_losses = []
-            self.valid_accs = []
-
-            for epoch in range(1, n_epochs+1):
-                for batch in range(self.N_SAMPLES // batch_size): 
-                    batch_x = self.normed_train_data[batch*batch_size: min((batch+1)*batch_size, self.N_SAMPLES)]
-                    batch_y = self.train_labels[batch*batch_size: min((batch+1)*batch_size, self.N_SAMPLES)]
-                    
-                    train_opt = sess.run(optimizer, feed_dict={self.x: batch_x, self.y: batch_y})
-                    train_loss, train_acc, s = sess.run([loss, acc, summ], feed_dict={self.x: batch_x, self.y: batch_y})  
-                    summary_writer.add_summary(s, batch)
-
-                valid_loss = sess.run(loss, feed_dict={self.x: self.valid_data, self.y: self.valid_labels}) 
-                self.train_losses.append(train_loss)
-                self.valid_losses.append(valid_loss)
-                self.train_accs.append(train_acc)
-                self.valid_accs.append(valid_acc)
-                if epoch % 10 == 0 and verbose:
-                    print(f'Epoch {epoch} train loss: {train_loss} \nValidation loss: {valid_loss}')
-        print(f'\nTraining Complete! Run `tensorboard --logdir={self.LOGDIR+str(lr)}` to see the results.')
-        
-        
-    def plot_loss_curve(self, n_epochs=50):
+        return val_loss
+    
+    
+    def plot_loss_curve(self, n_epochs, train_losses, val_losses=None):
         ''' Not sure the best way to incorporate these) '''
-        x = range(n_epochs)
-        fig = plt.figure(figsize=(9,6))
+        x_ax_range = range(n_epochs)
+#         fig = plt.figure(figsize=(9,6))
+        plt.subplot(2, 3, 1)
         plt.title('Training and Validation Loss')
         plt.ylabel('Loss') 
         plt.xlabel('Epochs')
-        plt.plot(x, self.train_losses, 'r', x, self.valid_losses, 'g')
+        plt.plot(x_ax_range, train_losses, 'r', x_ax_range, val_losses, 'g')
         plt.legend();
         
-    def plot_accuracy_curve(self, n_epochs=50):
-        x = range(n_epochs)
-        fig = plt.figure(figsize=(9,6))
+        
+    def plot_accuracy_curve(self, n_epochs, train_accs, val_accs=None):
+        x_ax_range = range(n_epochs)
+#         fig = plt.figure(figsize=(9,6))
+         plt.subplot(2, 3, 2)
         plt.title('Training and Validation Accuracy')
         plt.ylabel('Accuracy') 
         plt.xlabel('Epochs')
-        plt.plot(x, self.train_accs, 'r', x, self.valid_accs, 'g')
-        plt.legend();
-        
+        plt.plot(x_ax_range, train_accs, 'r', x_ax_range, val_accs, 'g')
+        plt.legend();        
