@@ -35,9 +35,9 @@ class keras_clf():
             pca = PCA(n_components=self.pca_components, whiten=True)
             normed_train_data = pca.fit_transform(normed_train_data)
             self.normed_test_data = pca.transform(self.normed_test_data)
-            
+        
         sm = SMOTE()
-        self.normed_train_data = pca.fit_transform(normed_train_data)
+        self.normed_train_data, self.train_labels = sm.fit_resample(normed_train_data, train_labels)
         
         self.N_FEATURES = len(normed_train_data[1])
         self.N_SAMPLES = len(normed_train_data)
