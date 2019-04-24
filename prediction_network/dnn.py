@@ -107,7 +107,7 @@ class keras_clf():
         model.add(keras.layers.Dense(1))  # ouput (for regression)
      
         opt = optimizers.Adam(lr=learning_rate, decay=None)
-        model.compile(optimizer=opt, loss=['mean_squared_error'], metrics=['mae'])
+        model.compile(optimizer=opt, loss=['mean_squared_error'], metrics=['accuracy'])
         history = model.fit(self.normed_train_data, self.train_labels, epochs=200,
                 validation_split=0.2, verbose=0, callbacks=[early_stop, PrintDot()])
 
