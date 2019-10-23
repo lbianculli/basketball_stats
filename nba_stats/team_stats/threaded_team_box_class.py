@@ -1,15 +1,18 @@
+# have to make sure all the spaces are equal. Can do so once I copy over to Sublime.
+
 import requests
 import bs4 as bs
 import pandas as pd
 import json
 import numpy as np
 import datetime
-from collections import defaultdict
 import threading
 from Queue import Queue
+import timeit
+from collections import defaultdict
+
 
 headers = {
-
     'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML like Gecko) Chrome/72.0.3626.81 Safari/537.36',
 }
 
@@ -28,15 +31,20 @@ def remove_comment_tags(url, timeout=10):
     return no_close_tag
 
 
-
 class APIScraper:
+    def __init__(self, timeout=10):
+        self.timeout = timeout
+        self.bad_urls = []
+        self.score_dict = defaultdict(defaultdict)
+        self.data_dict = defaultdict(defaultdict)
 
-
-  def team_basic_box(url, filter_=True):
+        
+        
+  def team_basic_box(self, url, filter_=True):
       ''' returns DF of basic box data for all teams at given date. Dont really need '''
 
       try:
-          resp = requests.get(url, headers=headers,timeout=5)
+          resp = requests.get(url, headers=headers,timeout=self.timeout)
           stats = resp.json()
           col_names = stats['resultSets'][0]['headers']
           col_names.remove('TEAM_NAME')
@@ -54,11 +62,10 @@ class APIScraper:
           print(e)
 
 
-
-  def team_advanced_box(url, filter_=True):
+  def team_advanced_box(self, url, filter_=True):
       ''' returns DF of advanced box score for all teams at given date '''
       try:
-          resp = requests.get(url, headers=headers,timeout=5)
+          resp = requests.get(url, headers=headers,timeout=self.timeout)
           stats = resp.json()
           col_names = stats['resultSets'][0]['headers']
           col_names.remove('TEAM_NAME')
@@ -77,11 +84,10 @@ class APIScraper:
           print(e)
 
 
-
-  def gen_offense(url, filter_=True):
+  def gen_offense(self, url, filter_=True):
       ''' returns DF of general offense data for all teams at given date '''
       try:
-          resp = requests.get(url, headers=headers,timeout=5).json()
+          resp = requests.get(url, headers=headers,timeout=self.timeout).json()
           offense_results = resp['resultSets']  # where this dict will be the json
           cols = offense_results[0]['headers']
           cols.remove('TEAM_NAME')
@@ -96,10 +102,10 @@ class APIScraper:
           print(e)
 
 
-  def gen_defense(two_pt_url, three_pt_url):
+  def gen_defense(self, two_pt_url, three_pt_url):
       ''' Scrapes two URLs for 2pt and 3pt defense, returns combined DF '''
       try:
-          resp1 = requests.get(two_pt_url, headers=headers, timeout=5).json()
+          resp1 = requests.get(two_pt_url, headers=headers, timeout=self.timeout).json()
           two_pt_results = resp1['resultSets']  # where this dict will be the json
           two_pt_cols = two_pt_results[0]['headers']
           two_pt_cols.remove('TEAM_NAME')
@@ -111,7 +117,7 @@ class APIScraper:
           two_pt_df = two_pt_df.drop(['FG2M', 'FG2A', 'TEAM_ID', 'TEAM_ABBREVIATION', 'GP', 'G'], axis=1)
 
 
-          resp2 = requests.get(three_pt_url, headers=headers, timeout=5).json()
+          resp2 = requests.get(three_pt_url, headers=headers, timeout=self.timeout).json()
           three_pt_results = resp2['resultSets']  # where this dict will be the json
           three_pt_cols = three_pt_results[0]['headers']
           three_pt_cols.remove('TEAM_NAME')
@@ -130,7 +136,7 @@ class APIScraper:
           print(e)
 
 
-  def bref_box(url):
+  def bref_box(self, url):
 
       resp = remove_comment_tags(url)
       soup = bs.BeautifulSoup(resp, 'lxml')
@@ -160,18 +166,22 @@ class APIScraper:
           print('Likely no games on this date')  # what error is this exactly?
 
 
-  def generate_season(season):
+    def generate_season(self, season):
+        """ get list of dates for the season """
+        start_date = '11-15-' + season[:4]  # add ~ a month to get 20 game threshold. *could* be done w/ timedelta
+        start = datetime.strptime(start_date, '%m-%d-%Y')
+        today = datetime.today()
+        today = datetime.strftime(today, '%m-%d-%Y')  # better way to do, with split (?)
+        this_year = int(today.strftime("%Y"))
+        next_year = str(this_year+1)[-2:]
+        curr_season = f"{this_year}-{next_year}"
 
-      start_date = '11-15-' + season[:4]  # add ~ a month to get 20 game threshold. *could* be done w/ timedelta
-      start = datetime.datetime.strptime(start_date, '%m-%d-%Y')
-      today = datetime.datetime.today()
-      today = datetime.datetime.strftime(today, '%m-%d-%Y')  # better way to do, with split (?)
-
-      if season == '2018-19':
-          end = datetime.datetime.strptime(today, '%m-%d-%Y')
-      else:
-          end = '04-20-20' + season[-2:]  # latest game seemed to be around this time
-          end = datetime.datetime.strptime(end, '%m-%d-%Y')
+    if season == curr_season:
+        end = datetime.datetime.strptime(today, '%m-%d-%Y')
+        end = datetime.datetime.strptime(today, '%m-%d-%Y')
+  else:
+      end = '04-20-20' + season[-2:]  # latest game seemed to be around this time
+      end = datetime.datetime.strptime(end, '%m-%d-%Y')
 
       date_range = end - start
       date_list = [end - datetime.timedelta(days=x) for x in range(1, date_range.days)]
@@ -179,7 +189,7 @@ class APIScraper:
       return date_list
 
 
-  def _get_data(date, season):
+  def _get_data(self, date, season):
       ''' combines all the above, stores data in two dicts. Date is a single day '''
 
       curr_date = date.date().__str__()
@@ -195,48 +205,47 @@ class APIScraper:
       bref_url = f'https://www.basketball-reference.com/boxscores/?month={month}&day={day}&year={year}'
 
 
-      basic_df = team_basic_box(api_basic_url)  
+      basic_df = team_basic_box(api_basic_url)  # this seems redundant with the first bi
       advanced_df = team_advanced_box(api_advanced_url)  
       defense_df = gen_defense(two_pt_url, three_pt_url)
       offense_df = gen_offense(general_offense_url)
 
       try:
-          basic_df = basic_df.loc[basic_df['GP'] >= 20]
-          advanced_df = advanced_df.loc[advanced_df['GP'] >= 20]
-          defense_df = defense_df.loc[defense_df['GP'] >= 20]
-          offense_df = offense_df.loc[offense_df['GP'] >= 20]
+          basic_df = self.basic_df.loc[basic_df['GP'] >= 20]
+          advanced_df = self.advanced_df.loc[advanced_df['GP'] >= 20]
+          defense_df = self.defense_df.loc[defense_df['GP'] >= 20]
+          offense_df = self.offense_df.loc[offense_df['GP'] >= 20]
 
           # make sure that at least 1 game for each team has been recorded. store list of dfs in dict
           if advanced_df.shape[0] == 30 and basic_df.shape[0] == 30 and defense_df.shape[0] == 30 and offense_df.shape[0] == 30:
-              data_dict[curr_date] = [basic_df, advanced_df, defense_df, offense_df]
+              self.data_dict[curr_date] = [basic_df, advanced_df, defense_df, offense_df]
 
-              score_df = (bref_box(bref_url))  
-              score_dict[curr_date] = score_df
+              score_df = (self.bref_box(bref_url))  # why is this a tuple?
+              self.score_dict[curr_date] = score_df
 
       except Exception as e:
           print(e)
 
       return
 
-  bad_urls = []
 
-  def get_data(q, season="2014-15"):
+  def get_data(self, q, season="2014-15"):
       while not q.empty():
           work = q.get()  # e.g. (0, "10-23-2019")
 
           try:
-              _get_data(work[1], season)  # date, season
+              self._get_data(work[1], season)  # date, season
           except Exception as e:
               logging.error(e)
-              bad_urls.append((work[1], season))  # maybe go back thru this at the end
+              self.bad_urls.append((work[1], season))  # maybe go back thru this at the end
 
           q.task_done()  # "Indicate that a formerly enqueued task is complete"
 
       return True
 
 
-  def main(season="2014-15", n_threads=16):
-      date_list = generate_season(season)
+  def run(self, season="2014-15", n_threads=16):
+      date_list = self.generate_season(season)
       n_threads = min(n_threads, len(date_list))
       q = Queue()
 
@@ -244,13 +253,19 @@ class APIScraper:
           q.put((i, date_list[i]))
 
       for i in range(n_threads): 
-          t = threading.Thread(target=get_data, args=(q, season))
-          t.setDaemon(True)  # main will exit even if all threads arent correctly completed
+          t = threading.Thread(target=self.get_data, args=(q, season))
+          t.setDaemon(True)  # main will exit even if all threads arent correctly completed. is this needed?
           t.start()
 
       q.join()
 
-
+    
+def main():
+    scraper = APIScraper()
+#     for season in seasons:
+    timeit.timeit(scraper.run(), number=1)
+    
+    
 if __name__ == '__main__':
     main()
    
