@@ -1,5 +1,3 @@
-# going from async to threading
-
 import requests
 import bs4 as bs
 import pandas as pd
